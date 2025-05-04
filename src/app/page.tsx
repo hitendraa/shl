@@ -1,103 +1,167 @@
-import Image from "next/image";
+"use client";
+
+import { useState } from 'react';
+import { SearchForm } from '@/components/search-form';
+import { RecommendationsSection } from '@/components/recommendations';
+import { EvaluationComponent } from '@/components/evaluation';
+import Image from 'next/image';
+import UploadButton from '@/components/upload-button';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { MessageCircle } from 'lucide-react';
+
+interface Recommendation {
+  name: string;
+  description: string;
+  type: string;
+  duration: string;
+  suitableFor: string;
+  relevanceScore: number | string;
+  remoteTestingAvailable: string;
+  link: string;
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [conversationalResponse, setConversationalResponse] = useState<string | undefined>();
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [searchError, setSearchError] = useState<string | undefined>();
+  const [lastQuery, setLastQuery] = useState<string>('');
+  const [showEvaluation, setShowEvaluation] = useState<boolean>(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  const handleSearch = async (query: string) => {
+    setIsSearching(true);
+    setSearchError(undefined);
+    setLastQuery(query);
+    setConversationalResponse(undefined);
+    
+    try {
+      const response = await fetch('/api/ask', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ question: query }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        setSearchError(data.error);
+        setRecommendations([]);
+        setConversationalResponse(undefined);
+      } 
+      // Check if it's a conversational response
+      else if (data.conversationalResponse) {
+        setConversationalResponse(data.conversationalResponse);
+        setRecommendations([]);
+      } 
+      // Check if it's recommendations
+      else if (data.recommendations && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+        // Ensure we display exactly up to 10 recommendations
+        const formattedRecommendations = data.recommendations
+          .slice(0, 10)
+          .map((rec: any) => ({
+            name: rec.name || "Unknown Assessment",
+            description: rec.description || "No description available",
+            type: rec.type || "Not specified",
+            duration: rec.duration || "Not specified",
+            suitableFor: rec.suitableFor || "All levels",
+            // Ensure relevanceScore is a number between 1-100
+            relevanceScore: typeof rec.relevanceScore === 'string' 
+              ? parseInt(rec.relevanceScore, 10) 
+              : rec.relevanceScore || 70,
+            remoteTestingAvailable: rec.remoteTestingAvailable || "Yes",
+            link: rec.link || "https://www.shl.com/solutions/products/product-catalog/"
+          }));
+          
+        console.log("Successfully processed recommendations:", formattedRecommendations.length);
+        setRecommendations(formattedRecommendations);
+        setConversationalResponse(undefined);
+      } else {
+        console.error("Invalid response format:", data);
+        setSearchError('No recommendations found. Try adjusting your query.');
+        setRecommendations([]);
+        setConversationalResponse(undefined);
+      }
+    } catch (error) {
+      console.error('Error searching:', error);
+      setSearchError('An error occurred while searching. Please try again.');
+      setRecommendations([]);
+      setConversationalResponse(undefined);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  return (
+    <main className="flex min-h-screen flex-col items-center p-4 md:p-8 lg:p-12">
+      <div className="w-full max-w-6xl mx-auto">
+        <header className="flex justify-between items-center mb-8">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-600 text-white font-bold text-2xl rounded-lg p-2 w-10 h-10 flex items-center justify-center">
+              S
+            </div>
+            <h1 className="text-3xl font-bold">SHL Assessment Recommender</h1>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => setShowEvaluation(!showEvaluation)}>
+              {showEvaluation ? 'Hide Evaluation' : 'Show Evaluation'}
+            </Button>
+            <UploadButton />
+          </div>
+        </header>
+        
+        {showEvaluation && <EvaluationComponent />}
+        
+        <SearchForm onSearch={handleSearch} isSearching={isSearching} />
+        
+        {lastQuery && (
+          <div className="mb-6">
+            <p className="text-sm text-gray-500 mb-1">Search query:</p>
+            <p className="text-sm font-medium bg-gray-50 p-3 rounded-md border border-gray-200">
+              {lastQuery}
+            </p>
+          </div>
+        )}
+        
+        {/* Display conversational response if exists */}
+        {conversationalResponse && (
+          <Alert className="mb-6 bg-blue-50 border border-blue-200">
+            <MessageCircle className="h-5 w-5 text-blue-500 mr-2" />
+            <AlertDescription className="text-md">
+              {conversationalResponse.split('\n').map((line, i) => (
+                <p key={i} className={i > 0 ? 'mt-2' : ''}>{line}</p>
+              ))}
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        <RecommendationsSection 
+          recommendations={recommendations} 
+          loading={isSearching} 
+          error={searchError}
+        />
+        
+        {!isSearching && recommendations.length === 0 && !searchError && !conversationalResponse && !showEvaluation && (
+          <div className="w-full flex flex-col items-center justify-center py-20 text-center">
+            <Image 
+              src="/globe.svg" 
+              alt="Search illustration" 
+              width={180} 
+              height={180} 
+              className="opacity-20 mb-8"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+            <h2 className="text-2xl font-bold text-gray-700 mb-2">Find the Perfect Assessments</h2>
+            <p className="text-gray-500 max-w-lg">
+              Enter your requirements above to get tailored assessment recommendations from SHL's comprehensive catalog.
+            </p>
+            <p className="text-gray-500 mt-2 max-w-lg">
+              You can ask questions like "What's the best assessment for Java developers?" or provide a full job description.
+            </p>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
