@@ -4,10 +4,13 @@ export async function POST() {
   try {
     const result = await uploadDataToPinecone();
     return Response.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error in upload route:', error);
     return Response.json(
-      { success: false, message: error.message || 'An unknown error occurred' }, 
+      { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'An unknown error occurred' 
+      }, 
       { status: 500 }
     );
   }

@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, Loader2, AlertTriangle } from "lucide-react";
+import { CheckCircle2, Loader2, AlertTriangle } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Define the test set with benchmark queries and expected assessments
@@ -102,7 +102,7 @@ interface TestResult {
 
 export function EvaluationComponent() {
   const [selectedTest, setSelectedTest] = useState<string>(testSet[0].id);
-  const [results, setResults] = useState<TestResult | null>(null);
+  const [, setResults] = useState<TestResult | null>(null);
   const [allResults, setAllResults] = useState<{[key: string]: TestResult}>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);

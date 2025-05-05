@@ -63,53 +63,79 @@ export async function POST(req: NextRequest) {
         
         // Ensure the recommendations have all required fields
         if (parsedResponse.recommendations) {
-          parsedResponse.recommendations = parsedResponse.recommendations.map(rec => {
-            // Get base SHL URL
-            let baseUrl = 'https://www.shl.com/solutions/products/product-catalog/';
-            
-            // Create a slug from the name
-            let slug = rec.name
-              ? rec.name
-                  .toLowerCase()
-                  .replace(/\s*\|\s*shl\s*$/i, '')  // Remove "| SHL" if present
-                  .replace(/\(new\)/i, '-new')      // Format (New) as -new
-                  .replace(/\s+/g, '-')            // Replace spaces with hyphens
-                  .replace(/[^\w-]/g, '')          // Remove special characters
-              : '';
-              
-            // Handle different link patterns
-            let finalLink;
-            if (rec.link && rec.link !== "URL to assessment") {
-              finalLink = rec.link.startsWith('http') ? rec.link : `${baseUrl}view/${rec.link}/`;
-            } else {
-              finalLink = `${baseUrl}view/${slug}/`;
-            }
-            
-            // Find a real assessment with this name in the source documents
-            const matchingSource = result.sourceDocuments ? 
-              result.sourceDocuments.find(doc => 
-                doc.metadata?.name?.toLowerCase() === rec.name?.toLowerCase() ||
-                doc.metadata?.name?.toLowerCase().includes(rec.name?.toLowerCase())
-              ) : null;
-              
-            if (matchingSource && matchingSource.metadata?.link) {
-              finalLink = matchingSource.metadata.link;
-              console.log(`Found matching source document for ${rec.name}`);
-            }
-            
-            return {
-              name: rec.name || "Unknown Assessment",
-              description: rec.description || "No description available",
-              type: rec.type || "Not specified",
-              duration: rec.duration || "Not specified",
-              suitableFor: rec.suitableFor || "All levels",
-              relevanceScore: typeof rec.relevanceScore === 'string' 
-                ? parseInt(rec.relevanceScore, 10) 
-                : rec.relevanceScore || 70,
-              remoteTestingAvailable: rec.remoteTestingAvailable || "Yes",
-              link: finalLink
+          interface RecommendationInput {
+            name?: string;
+            description?: string;
+            type?: string;
+            duration?: string;
+            suitableFor?: string;
+            relevanceScore?: string | number;
+            remoteTestingAvailable?: string;
+            link?: string;
+          }
+
+          interface ProcessedRecommendation {
+            name: string;
+            description: string;
+            type: string;
+            duration: string;
+            suitableFor: string;
+            relevanceScore: number;
+            remoteTestingAvailable: string;
+            link: string;
+          }
+
+          interface SourceDocument {
+            metadata?: {
+              name?: string;
+              link?: string;
             };
-          });
+          }
+
+                    parsedResponse.recommendations = parsedResponse.recommendations.map((rec: RecommendationInput): ProcessedRecommendation => {
+                      // Get base SHL URL
+                      const baseUrl: string = 'https://www.shl.com/solutions/products/product-catalog/';
+                      
+                      // Create a slug from the name
+                      const slug: string = rec.name
+                        ? rec.name
+                            .toLowerCase()
+                            .replace(/\s*\|\s*shl\s*$/i, '')  // Remove "| SHL" if present
+                            .replace(/\(new\)/i, '-new')      // Format (New) as -new
+                            .replace(/\s+/g, '-')            // Replace spaces with hyphens
+                            .replace(/[^\w-]/g, '')          // Remove special characters
+                        : '';
+                        
+                      // Handle different link patterns
+                      let finalLink: string = rec.link && rec.link !== "URL to assessment"
+                        ? rec.link.startsWith('http') ? rec.link : `${baseUrl}view/${rec.link}/`
+                        : `${baseUrl}view/${slug}/`;
+                      
+                      // Find a real assessment with this name in the source documents
+                      const matchingSource: SourceDocument | undefined = result.sourceDocuments ? 
+                        result.sourceDocuments.find((doc: SourceDocument) => 
+                          doc.metadata?.name?.toLowerCase() === rec.name?.toLowerCase() ||
+                          (doc.metadata?.name?.toLowerCase() && rec.name && doc.metadata.name.toLowerCase().includes(rec.name.toLowerCase()))
+                        ) : null;
+                        
+                      if (matchingSource && matchingSource.metadata?.link) {
+                        finalLink = matchingSource.metadata.link;
+                        console.log(`Found matching source document for ${rec.name}`);
+                      }
+                      
+                      return {
+                        name: rec.name || "Unknown Assessment",
+                        description: rec.description || "No description available",
+                        type: rec.type || "Not specified",
+                        duration: rec.duration || "Not specified",
+                        suitableFor: rec.suitableFor || "All levels",
+                        relevanceScore: typeof rec.relevanceScore === 'string' 
+                          ? parseInt(rec.relevanceScore, 10) 
+                          : rec.relevanceScore || 70,
+                        remoteTestingAvailable: rec.remoteTestingAvailable || "Yes",
+                        link: finalLink
+                      };
+                    });
           
           console.log(`Processed ${parsedResponse.recommendations.length} recommendations with links`);
           if (parsedResponse.recommendations.length > 0) {
@@ -137,22 +163,48 @@ export async function POST(req: NextRequest) {
           console.log('Extracted recommendations array directly');
           
           // Create the full response object
-          parsedResponse = {
-            recommendations: recArray.map(rec => ({
+            interface RecommendationInput {
+            name?: string;
+            description?: string;
+            type?: string;
+            duration?: string;
+            suitableFor?: string;
+            relevanceScore?: string | number;
+            remoteTestingAvailable?: string;
+            link?: string;
+            }
+
+            interface ProcessedRecommendation {
+            name: string;
+            description: string;
+            type: string;
+            duration: string;
+            suitableFor: string;
+            relevanceScore: number;
+            remoteTestingAvailable: string;
+            link: string;
+            }
+
+            interface ResponseWithRecommendations {
+            recommendations: ProcessedRecommendation[];
+            }
+
+            parsedResponse = {
+            recommendations: recArray.map((rec: RecommendationInput): ProcessedRecommendation => ({
               name: rec.name || "Unknown Assessment",
               description: rec.description || "No description available",
               type: rec.type || "Not specified",
               duration: rec.duration || "Not specified",
               suitableFor: rec.suitableFor || "All levels",
               relevanceScore: typeof rec.relevanceScore === 'string' 
-                ? parseInt(rec.relevanceScore, 10) 
-                : rec.relevanceScore || 70,
+              ? parseInt(rec.relevanceScore, 10) 
+              : rec.relevanceScore || 70,
               remoteTestingAvailable: rec.remoteTestingAvailable || "Yes",
-              link: rec.link === "URL to assessment" ? 
-                `https://www.shl.com/solutions/products/product-catalog/view/${rec.name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '')}/` : 
-                rec.link
+              link: (rec.link ?? "URL to assessment") === "URL to assessment" ? 
+              `https://www.shl.com/solutions/products/product-catalog/view/${(rec.name || "unknown-assessment").toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '')}/` : 
+              rec.link ?? ""
             }))
-          };
+            } as ResponseWithRecommendations;
           
           console.log('Successfully created parsedResponse from extracted recommendations');
         } catch (innerError) {

@@ -61,7 +61,7 @@ export default function Home() {
         // Ensure we display exactly up to 10 recommendations
         const formattedRecommendations = data.recommendations
           .slice(0, 10)
-          .map((rec: any) => ({
+          .map((rec: Recommendation) => ({
             name: rec.name || "Unknown Assessment",
             description: rec.description || "No description available",
             type: rec.type || "Not specified",
@@ -154,10 +154,10 @@ export default function Home() {
             />
             <h2 className="text-2xl font-bold text-gray-700 mb-2">Find the Perfect Assessments</h2>
             <p className="text-gray-500 max-w-lg">
-              Enter your requirements above to get tailored assessment recommendations from SHL's comprehensive catalog.
+              Enter your requirements above to get tailored assessment recommendations from SHL&apos;s comprehensive catalog.
             </p>
             <p className="text-gray-500 mt-2 max-w-lg">
-              You can ask questions like "What's the best assessment for Java developers?" or provide a full job description.
+              You can ask questions like &quot;What&apos;s the best assessment for Java developers?&quot; or provide a full job description.
             </p>
           </div>
         )}

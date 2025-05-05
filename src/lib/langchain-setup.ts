@@ -4,7 +4,7 @@ import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { PineconeStore } from '@langchain/pinecone';
 import { initPinecone } from './pinecone-client';
 import path from 'path';
-import { shouldUploadData, readJsonData } from './server-utils';
+import { readJsonData } from './server-utils';
 import { PromptTemplate } from '@langchain/core/prompts';
 import { BaseLanguageModel } from '@langchain/core/language_models/base';
 
@@ -38,15 +38,20 @@ interface PineconeRecord {
   [key: string]: string;
 }
 
-interface PineconeStats {
-  namespaces?: {
-    [key: string]: {
-      vectorCount: number;
-    };
-  };
+
+// @typescript-eslint/no-unused-vars
+class PineconeIntegratedEmbeddings {
+  async embedQuery(): Promise<number[]> {
+    // Static embedding for demonstration
+    return new Array(2048).fill(0.01);
+  }
+  
+  async embedDocuments(): Promise<number[][]> {
+    // Static embedding for demonstration
+    return [new Array(2048).fill(0.01)];
+  }
 }
 
-// Function to upload data to Pinecone
 export async function uploadDataToPinecone(): Promise<{ success: boolean; message: string }> {
   try {
     const dataFilePath = path.join(process.cwd(), 'src', 'data', 'data_scraped.json');
@@ -59,7 +64,10 @@ export async function uploadDataToPinecone(): Promise<{ success: boolean; messag
     }
     
     // Read and parse the data
-    const jsonData = await readJsonData(dataFilePath);
+    const jsonData = await readJsonData(dataFilePath) as { 
+      "Test-Type-Codes": TestTypeCode;
+      "Individual-Test-Solutions": unknown[];
+    };
     
     // Initialize Pinecone
     const pinecone = await initPinecone();
@@ -76,10 +84,10 @@ export async function uploadDataToPinecone(): Promise<{ success: boolean; messag
     
     // Filter out empty items and items without required fields
     const validSolutions = testSolutions.filter((item): item is TestSolution => 
-      item && 
+      item !== null && 
       typeof item === 'object' && 
       Object.keys(item).length > 0 &&
-      (item.name || item.Description)
+      ('name' in item || 'Description' in item)
     );
     
     console.log(`Found ${validSolutions.length} valid test solutions to process`);
@@ -90,7 +98,7 @@ export async function uploadDataToPinecone(): Promise<{ success: boolean; messag
       await index.namespace('ns1').deleteAll();
       console.log('Successfully deleted existing data');
     } catch (error) {
-      console.log('No existing data to delete or error during deletion, continuing with upload');
+      console.log('No existing data to delete or error during deletion, continuing with upload', error);
     }
     
     // Format data for Pinecone's integrated embedding
@@ -184,22 +192,12 @@ export async function uploadDataToPinecone(): Promise<{ success: boolean; messag
         message: `Uploaded ${records.length} assessments to Pinecone, but couldn't verify the final count.`
       };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error uploading data to Pinecone:', error);
     return { 
       success: false, 
-      message: `Error during upload: ${error.message || 'Unknown error'}`
+      message: error instanceof Error ? error.message : 'Unknown error'
     };
-  }
-}
-
-class PineconeIntegratedEmbeddings {
-  async embedQuery(text: string): Promise<number[]> {
-    return new Array(2048).fill(0.01);
-  }
-  
-  async embedDocuments(): Promise<number[][]> {
-    return [new Array(2048).fill(0.01)];
   }
 }
 
@@ -332,7 +330,7 @@ IMPORTANT REMINDERS:
     
     console.log("Chain successfully created");
     return chain;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error initializing chain:', error);
     const errorDetails = error instanceof Error 
       ? error.message + (error.stack ? `\nStack: ${error.stack}` : '')

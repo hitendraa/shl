@@ -23,7 +23,10 @@ export async function shouldUploadData(dataFilePath: string): Promise<boolean> {
       const hashData = await fs.readFile(hashFilePath, 'utf8');
       existingHash = JSON.parse(hashData);
     } catch (error) {
-      // File doesn't exist or can't be parsed, which is fine
+      // If the hash file doesn't exist, we will create it later
+      if (error instanceof Error && 'code' in error && error.code !== 'ENOENT') {
+        console.error('Error reading hash file:', error);
+      }
     }
     
     if (existingHash && existingHash.hash === currentHash) {
@@ -40,10 +43,10 @@ export async function shouldUploadData(dataFilePath: string): Promise<boolean> {
 }
 
 // Read data from the JSON file
-export async function readJsonData(filePath: string): Promise<any> {
+export async function readJsonData<T>(filePath: string): Promise<T> {
   try {
     const rawData = await fs.readFile(filePath, 'utf-8');
-    return JSON.parse(rawData);
+    return JSON.parse(rawData) as T;
   } catch (error) {
     console.error('Error reading JSON file:', error);
     throw new Error('Failed to read JSON data');

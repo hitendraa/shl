@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, UseFormReturn } from "react-hook-form";
 import * as z from "zod";
 
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,11 @@ interface SearchFormProps {
   isSearching: boolean;
 }
 
+// Function to set example query - moved outside component to avoid React Hook error
+const setExampleQuery = (query: string, form: UseFormReturn<z.infer<typeof formSchema>>) => {
+  form.setValue("query", query);
+};
+
 export function SearchForm({ onSearch, isSearching }: SearchFormProps) {
   // Example queries to help users get started
   const exampleQueries = [
@@ -46,11 +51,6 @@ export function SearchForm({ onSearch, isSearching }: SearchFormProps) {
 
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     onSearch(values.query);
-  };
-
-  // Function to set example query
-  const useExampleQuery = (query: string) => {
-    form.setValue("query", query);
   };
 
   return (
@@ -88,10 +88,10 @@ export function SearchForm({ onSearch, isSearching }: SearchFormProps) {
                     <button
                       key={i}
                       type="button"
-                      onClick={() => useExampleQuery(query)}
+                      onClick={() => setExampleQuery(query, form)}
                       className="text-xs text-blue-600 hover:text-blue-800 block max-w-lg truncate text-left"
                     >
-                      "{query.substring(0, 60)}..."
+                      &quat;{query.substring(0, 60)}...&quat;
                     </button>
                   ))}
                 </div>
