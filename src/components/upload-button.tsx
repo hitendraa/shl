@@ -41,7 +41,7 @@ export default function UploadButton() {
     <>
       <Button 
         onClick={handleUpload} 
-        disabled={isUploading}
+        disabled={true}
         className="bg-blue-600 hover:bg-blue-700 text-white"
       >
         {isUploading ? 'Uploading...' : 'Upload to Pinecone'}
