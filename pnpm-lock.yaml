@@ -14,6 +14,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.0.1(react-hook-form@7.56.1(react@19.1.0))
+      '@langchain/core':
+        specifier: ^0.3.51
+        version: 0.3.51(openai@4.97.0(zod@3.24.3))
       '@langchain/google-genai':
         specifier: ^0.2.5
         version: 0.2.5(@langchain/core@0.3.51(openai@4.97.0(zod@3.24.3)))(zod@3.24.3)

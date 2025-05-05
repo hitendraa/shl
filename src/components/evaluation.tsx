@@ -156,14 +156,14 @@ export function EvaluationComponent() {
       
       // Find matches, missing, and extra assessments
       const matches = testCase.expectedAssessments.filter(expected => 
-        actualAssessments.some(actual => actual.includes(expected))
+        actualAssessments.some((actual: string) => actual.includes(expected))
       );
       
       const missing = testCase.expectedAssessments.filter(expected => 
-        !actualAssessments.some(actual => actual.includes(expected))
+        !actualAssessments.some((actual: string) => actual.includes(expected))
       );
       
-      const extra = actualAssessments.filter(actual => 
+      const extra = actualAssessments.filter((actual: string) => 
         !testCase.expectedAssessments.some(expected => actual.includes(expected))
       );
       
@@ -174,7 +174,7 @@ export function EvaluationComponent() {
       const precisionAtK = Array(k).fill(0).map((_, i) => {
         const topK = actualAssessments.slice(0, i + 1);
         const relevantInTopK = testCase.expectedAssessments.filter(expected => 
-          topK.some(item => item.includes(expected))
+          topK.some((item: string) => item.includes(expected))
         ).length;
         return calculatePrecisionAtK(relevantInTopK, i + 1);
       });

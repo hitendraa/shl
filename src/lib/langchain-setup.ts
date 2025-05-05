@@ -3,10 +3,48 @@
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { PineconeStore } from '@langchain/pinecone';
 import { initPinecone } from './pinecone-client';
-import { Document } from 'langchain/document';
 import path from 'path';
 import { shouldUploadData, readJsonData } from './server-utils';
 import { PromptTemplate } from '@langchain/core/prompts';
+import { BaseLanguageModel } from '@langchain/core/language_models/base';
+
+interface TestTypeCode {
+  [key: string]: string;
+}
+
+interface TestSolution {
+  name?: string;
+  Description?: string;
+  'Job levels'?: string[] | string;
+  'Test Type'?: string[] | string;
+  'Languages'?: string[] | string;
+  'Assessment length'?: string;
+  'Remote Testing'?: string;
+  link?: string;
+}
+
+interface PineconeRecord {
+  id: string;
+  text: string;
+  name: string;
+  link: string;
+  remote_testing: string;
+  assessment_length: string;
+  job_levels: string;
+  languages: string;
+  test_type_codes: string;
+  test_types: string;
+  description: string;
+  [key: string]: string;
+}
+
+interface PineconeStats {
+  namespaces?: {
+    [key: string]: {
+      vectorCount: number;
+    };
+  };
+}
 
 // Function to upload data to Pinecone
 export async function uploadDataToPinecone(): Promise<{ success: boolean; message: string }> {
@@ -14,7 +52,7 @@ export async function uploadDataToPinecone(): Promise<{ success: boolean; messag
     const dataFilePath = path.join(process.cwd(), 'src', 'data', 'data_scraped.json');
     
     // Force upload data regardless of hash check
-    const shouldUpload = true; // Force upload every time for now until we confirm it works
+    const shouldUpload = true;
     
     if (!shouldUpload) {
       return { success: true, message: 'Data already up to date in Pinecone.' };
@@ -28,7 +66,7 @@ export async function uploadDataToPinecone(): Promise<{ success: boolean; messag
     const index = pinecone.index(process.env.PINECONE_INDEX_NAME!);
     
     // Extract test type codes for reference
-    const testTypeCodes = jsonData["Test-Type-Codes"] || {};
+    const testTypeCodes: TestTypeCode = jsonData["Test-Type-Codes"] || {};
     
     // Create documents from the Individual-Test-Solutions array
     const testSolutions = jsonData["Individual-Test-Solutions"] || [];
@@ -37,7 +75,7 @@ export async function uploadDataToPinecone(): Promise<{ success: boolean; messag
     }
     
     // Filter out empty items and items without required fields
-    const validSolutions = testSolutions.filter(item => 
+    const validSolutions = testSolutions.filter((item): item is TestSolution => 
       item && 
       typeof item === 'object' && 
       Object.keys(item).length > 0 &&
@@ -56,14 +94,12 @@ export async function uploadDataToPinecone(): Promise<{ success: boolean; messag
     }
     
     // Format data for Pinecone's integrated embedding
-    // IMPORTANT CHANGE: Pinecone requires all metadata to be flattened, we can't use nested objects
-    const records = [];
+    const records: PineconeRecord[] = [];
     
     for (let i = 0; i < validSolutions.length; i++) {
       const item = validSolutions[i];
       const id = `assessment_${i}`;
       
-      // Create the content field that will be embedded
       const content = [
         item.name ? `Name: ${item.name}` : '',
         item.Description ? `Description: ${item.Description}` : '',
@@ -74,48 +110,43 @@ export async function uploadDataToPinecone(): Promise<{ success: boolean; messag
         item["Remote Testing"] ? `Remote Testing: ${item["Remote Testing"]}` : ''
       ].filter(Boolean).join("\n");
       
-      // CRITICAL CHANGE: Instead of using a metadata object, we'll flatten all metadata into the record directly
-      const record = {
+      const record: PineconeRecord = {
         id,
-        text: content
+        text: content,
+        name: '',
+        link: '',
+        remote_testing: '',
+        assessment_length: '',
+        job_levels: '',
+        languages: '',
+        test_type_codes: '',
+        test_types: '',
+        description: ''
       };
       
-      // Add each metadata field directly to the record
       if (item.name) record.name = item.name;
       if (item.link) record.link = item.link;
       if (item["Remote Testing"]) record.remote_testing = item["Remote Testing"];
       if (item["Assessment length"]) record.assessment_length = item["Assessment length"];
       
-      // Handle job levels
       if (item["Job levels"]) {
-        if (Array.isArray(item["Job levels"])) {
-          const jobLevelsStr = item["Job levels"].join(", ");
-          record.job_levels = jobLevelsStr;
-        } else {
-          record.job_levels = String(item["Job levels"]);
-        }
+        record.job_levels = Array.isArray(item["Job levels"]) 
+          ? item["Job levels"].join(", ")
+          : String(item["Job levels"]);
       }
       
-      // Handle languages
       if (item["Languages"]) {
-        if (Array.isArray(item["Languages"])) {
-          const languagesStr = item["Languages"].join(", ");
-          record.languages = languagesStr;
-        } else {
-          record.languages = String(item["Languages"]);
-        }
+        record.languages = Array.isArray(item["Languages"])
+          ? item["Languages"].join(", ")
+          : String(item["Languages"]);
       }
       
-      // Handle test types
       if (item["Test Type"]) {
         if (Array.isArray(item["Test Type"])) {
-          const testTypesStr = item["Test Type"].join(", ");
-          record.test_type_codes = testTypesStr;
-          
-          const descriptionsStr = item["Test Type"]
+          record.test_type_codes = item["Test Type"].join(", ");
+          record.test_types = item["Test Type"]
             .map(code => testTypeCodes[code] || code)
             .join(", ");
-          record.test_types = descriptionsStr;
         } else {
           const code = String(item["Test Type"]);
           record.test_type_codes = code;
@@ -123,43 +154,28 @@ export async function uploadDataToPinecone(): Promise<{ success: boolean; messag
         }
       }
 
-      // Add description as a sanitized string
       if (item.Description) {
-        // Limit description length to avoid issues
-        const truncatedDesc = item.Description.substring(0, 500);
-        record.description = truncatedDesc;
+        record.description = item.Description.substring(0, 500);
       }
       
       records.push(record);
     }
     
-    console.log(`Prepared ${records.length} records for Pinecone upload`);
-    
-    // Process in smaller batches to avoid rate limits
+    // Process in smaller batches
     const batchSize = 20;
     for (let i = 0; i < records.length; i += batchSize) {
       const batch = records.slice(i, i + batchSize);
-      console.log(`Uploading batch ${Math.floor(i/batchSize) + 1} of ${Math.ceil(records.length/batchSize)}`);
-      
-      try {
-        // For integrated embedding, use upsertRecords instead
-        await index.namespace('ns1').upsertRecords(batch);
-        console.log(`Successfully uploaded batch ${Math.floor(i/batchSize) + 1}`);
-      } catch (error) {
-        console.error(`Error uploading batch ${Math.floor(i/batchSize) + 1}:`, error);
-        throw error;
-      }
+      await index.namespace('ns1').upsertRecords(batch);
     }
     
     // Verify the upload by checking the vector count
     try {
-      const stats = await index.describeStats();
-      console.log('Pinecone index stats after upload:', stats);
-      const vectorCount = stats.namespaces?.ns1?.vectorCount || 0;
+      const stats = await index.describeIndexStats();
+      const recordCount = stats.namespaces?.ns1?.recordCount || 0;
       
       return { 
         success: true, 
-        message: `Successfully uploaded ${records.length} assessments to Pinecone. Vector count in index: ${vectorCount}`
+        message: `Successfully uploaded ${records.length} assessments to Pinecone. Vector count in index: ${recordCount}`
       };
     } catch (error) {
       console.error('Error checking vector count:', error);
@@ -177,60 +193,48 @@ export async function uploadDataToPinecone(): Promise<{ success: boolean; messag
   }
 }
 
+class PineconeIntegratedEmbeddings {
+  async embedQuery(text: string): Promise<number[]> {
+    return new Array(2048).fill(0.01);
+  }
+  
+  async embedDocuments(): Promise<number[][]> {
+    return [new Array(2048).fill(0.01)];
+  }
+}
+
 export async function createChain() {
   try {
     console.log("Initializing Pinecone...");
     const pinecone = await initPinecone();
     const index = pinecone.index(process.env.PINECONE_INDEX_NAME!);
     
-    // Import required packages
-    console.log("Importing required packages...");
-    
     // Create custom embedding class that matches dimensions with Pinecone's integrated embedding
     console.log("Creating custom embedding adapter for Pinecone...");
-    class PineconeIntegratedEmbeddings {
-      // Match the expected dimension of the Pinecone index (2048 for llama-text-embed-v2)
-      async embedQuery(text) {
-        // Generate a fake embedding vector with the correct dimension (2048)
-        return new Array(2048).fill(0.01); // Small non-zero values to avoid potential issues
-      }
-      
-      async embedDocuments() {
-        // Return array with correct dimensions
-        return [new Array(2048).fill(0.01)];
-      }
-    }
-    
-    // Create the embeddings instance
     const embeddings = new PineconeIntegratedEmbeddings();
     
     console.log("Creating vector store...");
-    // Use Pinecone with the placeholder embeddings - Pinecone will use llama-text-embed-v2 internally
     const vectorStore = await PineconeStore.fromExistingIndex(
       embeddings,
       { 
         pineconeIndex: index,
         namespace: 'ns1',
-        textKey: 'text' // The field containing text to embed in your records
-        // Remove the filter option from here since we'll pass it in the retriever
+        textKey: 'text'
       }
     );
     
     console.log("Initializing ChatGoogleGenerativeAI...");
-    // Initialize the Gemini model for chat
     const model = new ChatGoogleGenerativeAI({
       apiKey: process.env.GEMINI_API_KEY || '',
-      model: "gemini-2.0-flash", // Using Gemini 2.0 Flash for better performance
-      temperature: 0.2, // Lower temperature for more consistent results
-      maxOutputTokens: 4096, // Increased token limit for more comprehensive analysis
+      model: "gemini-2.0-flash",
+      temperature: 0.2,
+      maxOutputTokens: 4096,
     });
     
     console.log("Creating RetrievalQAChain...");
     
-    // Import RetrievalQAChain
     const { RetrievalQAChain } = await import('langchain/chains');
     
-    // Enhanced prompt template with improved conversational capabilities and assessment accuracy
     const promptTemplate = new PromptTemplate({
       template: `
 You are an intelligent Assessment Recommendation Assistant for SHL. Your primary function is to help users find the most relevant assessments for their hiring needs based on job descriptions, requirements, or general queries.
@@ -311,13 +315,12 @@ IMPORTANT REMINDERS:
       inputVariables: ["query", "context"]
     });
 
-    // Create a custom chain that will return structured assessment recommendations
     const chain = RetrievalQAChain.fromLLM(
-      model, 
+      model as BaseLanguageModel,
       vectorStore.asRetriever({
         searchType: "similarity",
-        k: 75, // Increased to retrieve more documents to ensure we find enough relevant assessments
-        filter: {} // Keep the filter option here
+        k: 75,
+        filter: {}
       }),
       {
         returnSourceDocuments: true,
