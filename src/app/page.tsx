@@ -108,7 +108,10 @@ export default function Home() {
             <Button variant="outline" onClick={() => setShowEvaluation(!showEvaluation)}>
               {showEvaluation ? 'Hide Evaluation' : 'Show Evaluation'}
             </Button>
-            <UploadButton/>
+            <Button variant="outline" asChild>
+              <a href="/about">About System</a>
+            </Button>
+            <UploadButton />
           </div>
         </header>
         
